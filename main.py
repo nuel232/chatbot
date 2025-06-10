@@ -10,7 +10,6 @@ import hashlib
 import bleach
 import markdown
 from string import ascii_uppercase
-from supabase import create_client
 import requests
 from werkzeug.utils import secure_filename
 
@@ -32,20 +31,6 @@ else:
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "static/uploads")
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max upload size
-
-# Initialize Supabase client
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-supabase = None
-
-if SUPABASE_URL and SUPABASE_KEY:
-    try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print("Supabase client initialized successfully")
-    except Exception as e:
-        print(f"Error initializing Supabase client: {e}")
-else:
-    print("Supabase credentials not provided, using local storage only")
 
 # Initialize Socket.IO
 socketio = SocketIO(
@@ -102,7 +87,6 @@ class Message(db.Model):
     room_id = db.Column(db.String(4), db.ForeignKey('room.id'), nullable=False)
     read_by = db.Column(db.JSON, default=lambda: json.dumps([]))
     reactions = db.relationship('Reaction', backref='message', lazy=True, cascade="all, delete")
-    supabase_id = db.Column(db.String(36), nullable=True)  # Store Supabase ID for cloud sync
 
 class Reaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -121,146 +105,10 @@ class DirectMessage(db.Model):
     edited_at = db.Column(db.DateTime, nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     is_read = db.Column(db.Boolean, default=False)
-    supabase_id = db.Column(db.String(36), nullable=True)  # Store Supabase ID for cloud sync
 
 # Create tables
 with app.app_context():
     db.create_all()
-
-# Sync data from Supabase if configured
-def sync_from_supabase():
-    """Synchronize data from Supabase to local database on app startup"""
-    if not supabase:
-        return
-    
-    try:
-        print("Starting Supabase data synchronization...")
-        
-        # Sync users
-        users_response = supabase.table('users').select('*').execute()
-        if users_response.data:
-            for user_data in users_response.data:
-                # Check if user exists locally
-                user = User.query.filter_by(id=user_data.get('id')).first()
-                if not user:
-                    # Create user locally
-                    try:
-                        created_at = datetime.fromisoformat(user_data.get('created_at'))
-                    except:
-                        created_at = datetime.utcnow()
-                        
-                    user = User(
-                        id=user_data.get('id'),
-                        username=user_data.get('username'),
-                        display_name=user_data.get('display_name'),
-                        created_at=created_at
-                    )
-                    db.session.add(user)
-        
-        # Sync rooms
-        rooms_response = supabase.table('rooms').select('*').execute()
-        if rooms_response.data:
-            for room_data in rooms_response.data:
-                # Check if room exists locally
-                room = Room.query.filter_by(id=room_data.get('id')).first()
-                if not room:
-                    # Create room locally
-                    try:
-                        created_at = datetime.fromisoformat(room_data.get('created_at'))
-                    except:
-                        created_at = datetime.utcnow()
-                        
-                    room = Room(
-                        id=room_data.get('id'),
-                        creator=room_data.get('creator'),
-                        is_public=room_data.get('is_public', False),
-                        created_at=created_at
-                    )
-                    db.session.add(room)
-        
-        # Sync room messages
-        messages_response = supabase.table('messages').select('*').execute()
-        if messages_response.data:
-            for message_data in messages_response.data:
-                # Check if message exists locally by supabase_id
-                existing_message = Message.query.filter_by(supabase_id=message_data.get('id')).first()
-                if not existing_message:
-                    # Check if message exists locally by local_id
-                    local_id = message_data.get('local_id')
-                    if local_id:
-                        existing_message = Message.query.filter_by(id=local_id).first()
-                    
-                    if not existing_message:
-                        # Create message locally
-                        try:
-                            timestamp = datetime.fromisoformat(message_data.get('timestamp'))
-                        except:
-                            timestamp = datetime.utcnow()
-                            
-                        try:
-                            edited_at = datetime.fromisoformat(message_data.get('edited_at')) if message_data.get('edited_at') else None
-                        except:
-                            edited_at = None
-                            
-                        message = Message(
-                            content=message_data.get('content'),
-                            raw_content=message_data.get('raw_content'),
-                            sender=message_data.get('sender'),
-                            user_id=message_data.get('user_id'),
-                            timestamp=timestamp,
-                            edited_at=edited_at,
-                            is_deleted=message_data.get('is_deleted', False),
-                            room_id=message_data.get('room_id'),
-                            read_by=message_data.get('read_by', json.dumps([])),
-                            supabase_id=message_data.get('id')
-                        )
-                        db.session.add(message)
-                    else:
-                        # Update existing message with Supabase ID
-                        existing_message.supabase_id = message_data.get('id')
-        
-        # Sync direct messages
-        dm_response = supabase.table('direct_messages').select('*').execute()
-        if dm_response.data:
-            for dm_data in dm_response.data:
-                # Check if message exists locally by supabase_id
-                existing_dm = DirectMessage.query.filter_by(supabase_id=dm_data.get('id')).first()
-                if not existing_dm:
-                    # Check if message exists locally by local_id
-                    local_id = dm_data.get('local_id')
-                    if local_id:
-                        existing_dm = DirectMessage.query.filter_by(id=local_id).first()
-                    
-                    if not existing_dm:
-                        # Create message locally
-                        try:
-                            timestamp = datetime.fromisoformat(dm_data.get('timestamp'))
-                        except:
-                            timestamp = datetime.utcnow()
-                            
-                        direct_message = DirectMessage(
-                            content=dm_data.get('content'),
-                            raw_content=dm_data.get('raw_content'),
-                            sender_id=dm_data.get('sender_id'),
-                            recipient_id=dm_data.get('recipient_id'),
-                            timestamp=timestamp,
-                            is_read=dm_data.get('is_read', False),
-                            supabase_id=dm_data.get('id')
-                        )
-                        db.session.add(direct_message)
-                    else:
-                        # Update existing message with Supabase ID
-                        existing_dm.supabase_id = dm_data.get('id')
-        
-        db.session.commit()
-        print("Supabase data synchronization completed successfully")
-    except Exception as e:
-        print(f"Error synchronizing data from Supabase: {e}")
-        db.session.rollback()
-
-# Call sync on app startup
-with app.app_context():
-    sync_from_supabase()
 
 # In-memory storage for active room members
 active_rooms = {}
@@ -277,19 +125,6 @@ def get_or_create_user(username):
         )
         db.session.add(user)
         db.session.commit()
-        
-        # If Supabase is configured, also create user there
-        if supabase:
-            try:
-                # Store user in Supabase for cloud sync
-                supabase.table('users').insert({
-                    'id': user.id,
-                    'username': user.username,
-                    'display_name': user.display_name,
-                    'created_at': user.created_at.isoformat()
-                }).execute()
-            except Exception as e:
-                print(f"Error saving user to Supabase: {e}")
     
     return user
 
@@ -390,52 +225,22 @@ def format_message_for_client(message, current_user=None):
         "is_read": is_read
     }
 
-def upload_file_to_supabase(file):
-    """Upload a file to Supabase Storage"""
-    if not supabase:
-        return None
-    
+def upload_file(file):
+    """Upload a file to local storage"""
     try:
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(file_path)
         
-        # Verify the bucket exists, create if not
-        bucket_name = 'profile_pictures'
-        try:
-            # Check if bucket exists by attempting to get its details
-            supabase.storage.get_bucket(bucket_name)
-            print(f"Bucket '{bucket_name}' exists")
-        except Exception as e:
-            if "Not found" in str(e):
-                # Create the bucket if it doesn't exist
-                try:
-                    supabase.storage.create_bucket(bucket_name, {'public': True})
-                    print(f"Created bucket '{bucket_name}'")
-                except Exception as create_error:
-                    print(f"Error creating bucket: {create_error}")
-                    return None
-            else:
-                print(f"Error checking bucket: {e}")
-                return None
-        
-        # Upload to Supabase storage
-        with open(file_path, 'rb') as f:
-            response = supabase.storage.from_(bucket_name).upload(
-                filename,
-                f.read(),
-                {'content-type': file.content_type}
-            )
-        
-        # Get the public URL
-        file_url = supabase.storage.from_(bucket_name).get_public_url(filename)
+        # Return the URL to the file
+        file_url = url_for('static', filename=f'uploads/{filename}')
         return file_url
     except Exception as e:
-        print(f"Error uploading file to Supabase: {e}")
+        print(f"Error uploading file: {e}")
         return None
 
 def save_direct_message(sender_id, recipient_id, content):
-    """Save a direct message to the database and Supabase"""
+    """Save a direct message to the database"""
     processed_content = process_message_content(content)
     
     # Create the direct message in the local database
@@ -447,27 +252,6 @@ def save_direct_message(sender_id, recipient_id, content):
     )
     db.session.add(direct_message)
     db.session.commit()
-    
-    # If Supabase is configured, also save message there
-    if supabase:
-        try:
-            result = supabase.table('direct_messages').insert({
-                'local_id': direct_message.id,
-                'content': processed_content,
-                'raw_content': content,
-                'sender_id': sender_id,
-                'recipient_id': recipient_id,
-                'timestamp': direct_message.timestamp.isoformat(),
-                'is_read': False
-            }).execute()
-            
-            # Get the Supabase ID and update the local record
-            if result.data and len(result.data) > 0:
-                supabase_id = result.data[0]['id']
-                direct_message.supabase_id = supabase_id
-                db.session.commit()
-        except Exception as e:
-            print(f"Error saving direct message to Supabase: {e}")
     
     return direct_message
 
@@ -509,36 +293,6 @@ def format_direct_message_for_client(message):
         "is_deleted": message.is_deleted,
         "is_read": message.is_read
     }
-
-def save_message_to_supabase(message):
-    """Save a message to Supabase for cloud sync"""
-    if not supabase or not message:
-        return
-    
-    try:
-        result = supabase.table('messages').insert({
-            'local_id': message.id,
-            'content': message.content,
-            'raw_content': message.raw_content,
-            'sender': message.sender,
-            'user_id': message.user_id,
-            'timestamp': message.timestamp.isoformat(),
-            'edited_at': message.edited_at.isoformat() if message.edited_at else None,
-            'is_deleted': message.is_deleted,
-            'room_id': message.room_id,
-            'read_by': message.read_by
-        }).execute()
-        
-        # Get the Supabase ID and update the local record
-        if result.data and len(result.data) > 0:
-            supabase_id = result.data[0]['id']
-            message.supabase_id = supabase_id
-            db.session.commit()
-            return supabase_id
-    except Exception as e:
-        print(f"Error saving message to Supabase: {e}")
-    
-    return None
 
 @app.route("/", methods=["POST", "GET"])
 def home():
@@ -632,13 +386,15 @@ def profile():
     
     if request.method == "POST":
         display_name = request.form.get("display_name")
-        profile_picture = request.form.get("profile_picture")
+        profile_picture = request.files.get("profile_picture")
         
         if display_name:
             user.display_name = display_name
             
-        if profile_picture:
-            user.profile_picture = profile_picture
+        if profile_picture and profile_picture.filename:
+            file_url = upload_file(profile_picture)
+            if file_url:
+                user.profile_picture = file_url
             
         db.session.commit()
         flash("Profile updated successfully!", "success")
@@ -760,20 +516,6 @@ def edit_message(message_id):
     
     db.session.commit()
     
-    # Sync to Supabase if configured
-    if supabase and message.supabase_id:
-        try:
-            supabase.table('messages').update({
-                'content': message.content,
-                'raw_content': message.raw_content,
-                'edited_at': message.edited_at.isoformat()
-            }).eq('id', message.supabase_id).execute()
-        except Exception as e:
-            print(f"Error updating message in Supabase: {e}")
-    # If message doesn't have supabase_id yet, save it
-    elif supabase:
-        save_message_to_supabase(message)
-    
     # Emit message update to room
     socketio.emit(
         "message_update", 
@@ -807,19 +549,6 @@ def delete_message(message_id):
     message.content = "<em>This message has been deleted.</em>"
     
     db.session.commit()
-    
-    # Sync to Supabase if configured
-    if supabase and message.supabase_id:
-        try:
-            supabase.table('messages').update({
-                'is_deleted': True,
-                'content': message.content
-            }).eq('id', message.supabase_id).execute()
-        except Exception as e:
-            print(f"Error updating message deletion in Supabase: {e}")
-    # If message doesn't have supabase_id yet, save it
-    elif supabase:
-        save_message_to_supabase(message)
     
     # Emit message deletion to room
     socketio.emit(
@@ -902,10 +631,6 @@ def message(data):
     )
     db.session.add(new_message)
     db.session.commit()
-    
-    # Save to Supabase for cloud sync
-    if supabase:
-        save_message_to_supabase(new_message)
     
     # Get user object for formatting
     user = User.query.get(user_id) if user_id else None
@@ -1075,14 +800,6 @@ def direct_messages(user_id):
     
     for msg in unread_messages:
         msg.is_read = True
-        # Update in Supabase if configured
-        if supabase and msg.supabase_id:
-            try:
-                supabase.table('direct_messages').update({
-                    'is_read': True
-                }).eq('id', msg.supabase_id).execute()
-            except Exception as e:
-                print(f"Error updating message read status in Supabase: {e}")
     
     db.session.commit()
     
@@ -1165,15 +882,6 @@ def mark_direct_message_read(message_id):
     
     message.is_read = True
     db.session.commit()
-    
-    # Update in Supabase if configured
-    if supabase and message.supabase_id:
-        try:
-            supabase.table('direct_messages').update({
-                'is_read': True
-            }).eq('id', message.supabase_id).execute()
-        except Exception as e:
-            print(f"Error updating message read status in Supabase: {e}")
     
     # Emit read receipt via Socket.IO
     socketio.emit(
