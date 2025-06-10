@@ -1,0 +1,125 @@
+{% extends 'base.html' %} {% block content %}
+<div class="home-container">
+  <div class="join-room-container">
+    <div class="form-header">
+      <h2>Join a Chat Room</h2>
+      <div class="toggle-container">
+        <button id="join-toggle" class="toggle-btn active">Join Room</button>
+        <button id="create-toggle" class="toggle-btn">Create Room</button>
+      </div>
+    </div>
+
+    <form method="post" class="join-form">
+      <div class="form-group">
+        <label for="name">Username</label>
+    <input
+      type="text"
+      name="name"
+          id="name"
+          placeholder="Enter a username"
+      value="{{ name }}"
+          required
+    />
+  </div>
+
+      <div id="join-fields">
+        <div class="form-group">
+          <label for="code">Room Code</label>
+    <input
+            type="text"
+            name="code"
+            id="code"
+            placeholder="Enter a room code"
+            value="{{ code }}"
+          />
+        </div>
+        <button type="submit" name="join" value="true" class="action-button">
+          <i class="fas fa-sign-in-alt"></i> Join Room
+        </button>
+      </div>
+
+      <div id="create-fields" style="display: none">
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="public" name="public" value="true" />
+            <label for="public">Make room public</label>
+          </div>
+        </div>
+        <button type="submit" name="create" value="true" class="action-button create-btn">
+          <i class="fas fa-plus-circle"></i> Create New Room
+        </button>
+  </div>
+
+  {% if error %}
+      <div class="error-message">
+        <i class="fas fa-exclamation-circle"></i> {{ error }}
+      </div>
+  {% endif %}
+    </form>
+  </div>
+
+  <div class="public-rooms-container">
+    <h2>Public Rooms</h2>
+    {% if public_room_list %}
+    <div class="rooms-list">
+    {% for room in public_room_list %}
+      <div class="room-item">
+        <div class="room-info">
+          <div class="room-code">{{ room.code }}</div>
+          <div class="room-creator">Created by: {{ room.creator }}</div>
+        </div>
+        <form method="post" class="join-public-form">
+          <input type="hidden" name="name" value="{{ name }}" />
+          <input type="hidden" name="code" value="{{ room.code }}" />
+          <button type="submit" name="join" value="true" class="join-public-btn">
+            <i class="fas fa-sign-in-alt"></i> Join
+          </button>
+        </form>
+      </div>
+    {% endfor %}
+    </div>
+    {% else %}
+    <div class="no-rooms">
+      <i class="fas fa-info-circle"></i> No public rooms available. Create one!
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  const joinToggle = document.getElementById("join-toggle");
+  const createToggle = document.getElementById("create-toggle");
+  const joinFields = document.getElementById("join-fields");
+  const createFields = document.getElementById("create-fields");
+  const codeInput = document.getElementById("code");
+  const nameInput = document.getElementById("name");
+
+  joinToggle.addEventListener("click", () => {
+    joinToggle.classList.add("active");
+    createToggle.classList.remove("active");
+    joinFields.style.display = "block";
+    createFields.style.display = "none";
+  });
+
+  createToggle.addEventListener("click", () => {
+    createToggle.classList.add("active");
+    joinToggle.classList.remove("active");
+    createFields.style.display = "block";
+    joinFields.style.display = "none";
+    codeInput.value = "";
+  });
+
+  // Pre-fill username in public room join forms
+  document.querySelectorAll('.join-public-form').forEach(form => {
+    form.addEventListener('submit', function() {
+      const username = nameInput.value.trim();
+      if (username) {
+        this.querySelector('input[name="name"]').value = username;
+      } else {
+        alert('Please enter a username first!');
+        event.preventDefault();
+      }
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends 'base.html' %} {% block content %}
+<div class="profile-container">
+  <div class="profile-header">
+    <h2>Your Profile</h2>
+    <a href="{{ url_for('room', code=session.room) }}" class="back-link">
+      <i class="fas fa-arrow-left"></i> Back to Chat
+    </a>
+  </div>
+
+  <div class="profile-content">
+    <div class="profile-image-section">
+      <div class="profile-image-container">
+        {% if user.profile_picture %}
+          <img src="{{ url_for('static', filename='uploads/' + user.profile_picture) }}" alt="Profile picture" class="profile-image">
+        {% else %}
+          <div class="profile-image-placeholder">
+            <i class="fas fa-user"></i>
+          </div>
+        {% endif %}
+      </div>
+      <form action="{{ url_for('profile') }}" method="post" enctype="multipart/form-data" class="upload-form">
+        <div class="file-input-wrapper">
+          <input type="file" name="profile_picture" id="profile-picture-upload" accept="image/*">
+          <label for="profile-picture-upload" class="file-input-label">
+            <i class="fas fa-camera"></i> Change Picture
+          </label>
+        </div>
+      </form>
+    </div>
+
+    <div class="profile-details">
+      <form action="{{ url_for('profile') }}" method="post" class="profile-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" value="{{ user.username }}" disabled>
+          <p class="field-info">Username cannot be changed</p>
+        </div>
+        
+        <div class="form-group">
+          <label for="display_name">Display Name</label>
+          <input type="text" id="display_name" name="display_name" value="{{ user.display_name or user.username }}" required>
+          <p class="field-info">This is how your name will appear in chats</p>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="save-btn">Save Changes</button>
+          <a href="{{ url_for('settings') }}" class="settings-link">
+            <i class="fas fa-cog"></i> App Settings
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Auto-submit form when file is selected
+  document.getElementById('profile-picture-upload').addEventListener('change', function() {
+    if (this.files.length > 0) {
+      document.querySelector('.upload-form').submit();
+    }
+  });
+</script>
+{% endblock %} 

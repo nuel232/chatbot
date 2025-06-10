@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatRoom</title>
+    <link
+      rel="stylesheet"
+      href="{{url_for('static', filename='css/style.css')}}"
+    />
+    <!-- Link to the CSS file for styling -->
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"
+      integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
+      crossorigin="anonymous"
+    ></script>
+    <!-- Script tag for including Socket.IO library -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="theme-color" content="#4A6FA5">
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="logo">
+          <a href="/">
+            <h1><i class="fas fa-comments"></i> ChatRoom</h1>
+          </a>
+        </div>
+        {% if session.name %}
+        <div class="user-info">
+          <a href="{{ url_for('profile') }}" class="profile-link">
+            <i class="fas fa-user-circle"></i> {{ session.name }}
+          </a>
+          <a href="{{ url_for('home') }}" class="logout-btn">
+            <i class="fas fa-sign-out-alt"></i> Logout
+          </a>
+        </div>
+        {% endif %}
+      </header>
+      
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-messages">
+            {% for category, message in messages %}
+              <div class="flash-message {{ category }}">
+                {{ message }}
+                <button class="close-btn">&times;</button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      
+      <main>{% block content %} {% endblock %}</main>
+      
+      <footer>
+        <p>&copy; 2023 ChatRoom. All rights reserved.</p>
+      </footer>
+    </div>
+    
+    <script>
+      // Flash message close button functionality
+      document.addEventListener('DOMContentLoaded', function() {
+        const closeButtons = document.querySelectorAll('.close-btn');
+        closeButtons.forEach(button => {
+          button.addEventListener('click', function() {
+            this.parentElement.style.display = 'none';
+          });
+        });
+      });
+      
+      // Close alert messages
+      document.querySelectorAll('.close-alert').forEach(button => {
+        button.addEventListener('click', () => {
+          const alert = button.parentElement;
+          alert.classList.add('fade-out');
+          setTimeout(() => {
+            alert.remove();
+          }, 300);
+        });
+      });
+      
+      // Check for saved theme
+      document.addEventListener('DOMContentLoaded', function() {
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        if (savedTheme === 'dark') {
+          document.body.classList.add('dark-theme');
+        }
+      });
+    </script>
+  </body>
+</html>
