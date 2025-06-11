@@ -2,13 +2,18 @@ services:
   - type: web
     name: chatapp
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn main:app
+    buildCommand: chmod +x render_build.sh && ./render_build.sh
+    # Try to use main.py as the primary entry point
+    startCommand: gunicorn -k eventlet -w 1 main:app
+    # Uncomment the following line if the above fails
+    # startCommand: gunicorn -k eventlet -w 1 app:app
     envVars:
       - key: FLASK_ENV
         value: production
       - key: SECRET_KEY
         generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.11
     plan: free
 
 databases:

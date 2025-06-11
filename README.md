@@ -67,6 +67,16 @@ To deploy this application to Render:
    - `SECRET_KEY`: A secure random string for session encryption
 4. Deploy!
 
+### Deployment Troubleshooting
+
+If you encounter issues with the Render deployment:
+
+1. Check that your `render.yaml` is correctly configured with `startCommand: gunicorn main:app`
+2. Ensure you have both `app.py` and `wsgi.py` in your repository as alternative entry points
+3. Make sure your Procfile has the correct command: `web: gunicorn -k eventlet -w 1 main:app`
+4. If you see a "No module named 'app'" error, try uncommenting the alternative start command in `render.yaml`
+5. For Socket.IO applications, ensure you're using the eventlet worker: `-k eventlet -w 1`
+
 ## Technologies Used
 
 - **Backend**: Flask, Flask-SocketIO
